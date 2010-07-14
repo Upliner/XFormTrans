@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using System.Xml;
 using System.Windows.Forms;
+using NewXForms = XFormTrans.NewXForms;
 
 namespace XFormTrans
 {
@@ -34,6 +35,7 @@ namespace XFormTrans
         protected const int scale = 15;
         public readonly List<XControl> childs = new List<XControl>();
         private Control control;
+        private NewXForms.XControl xcontrol;
         public XFormObj(XmlNode node) : base(node) { }
         private void PutToNode(XmlNode node)
         {
@@ -59,6 +61,7 @@ namespace XFormTrans
             return doc.InnerXml;
         }
         protected abstract Control CreateControl();
+        protected abstract NewXForms.XControl CreateXControl();
         public Control GetControl()
         {
             if (control == null)
@@ -67,6 +70,15 @@ namespace XFormTrans
                 foreach (XControl cctl in childs) control.Controls.Add(cctl.GetControl());
             }
             return control;
+        }
+        public NewXForms.XControl GetXControl()
+        {
+            if (xcontrol == null)
+            {
+                xcontrol = CreateXControl();
+                foreach (XControl cctl in childs) cctl.GetXControl();
+            }
+            return xcontrol;
         }
 
         public IEnumerable<XControl> EnumerateChilds()
@@ -82,6 +94,22 @@ namespace XFormTrans
     public class XForm: XFormObj
     {
         public readonly Dictionary<string, XControl> childsdic = new Dictionary<string, XControl>();
+        protected override NewXForms.XControl CreateXControl()
+        {
+            string caption = RawAttrs["Caption"];
+            int width = int.Parse(RawAttrs["Width"]) / scale;
+            int height = 0;
+            foreach (XControl child in childs)
+            {
+                try {
+                    int ctlbottom = int.Parse(child["Top"])+int.Parse(child["Height"]);
+                    if (ctlbottom > height) height = ctlbottom;
+                } catch (Exception) {
+                }
+                
+            }
+            return new NewXForms.XForm(new Size(width, height),caption);
+        }
         protected override Control CreateControl()
         {
             Form form = new Form();
@@ -170,6 +198,57 @@ namespace XFormTrans
                 } else return new Point(x, y);
 
             }
+        }
+        protected override NewXForms.XControl CreateXControl()
+        {
+            int type = 0;
+            string capt = this["ControlType"];
+            if (capt != null) int.TryParse(capt, out type);
+            capt = this["Caption"];
+            NewXForms.XControl ctl;
+            Type ctlType;
+            string elemname;
+            switch (type)
+            {
+                case 100:
+                    ctlType = typeof(Label);
+                    elemname = "label";
+                    break;
+                case 123:
+                    ctlType = typeof(TabControl);
+                    elemname = "tabcontrol";
+                    break;
+                case 124:
+                    ctlType = typeof(TabPage);
+                    elemname = "tabpage";
+                    break;
+                case 106:
+                    ctlType = typeof(CheckBox);
+                    elemname = "checkbox";
+                    break;
+                case 109:
+                case 111:
+                    ctlType = typeof(TextBox);
+                    elemname = "textbox";
+                    break;
+                case 104:
+                    ctlType = typeof(Button);
+                    elemname = "button";
+                    break;
+                default:
+                    ctlType = typeof(GroupBox);
+                    elemname = "unknown";
+                    break;
+            }
+            Rectangle bounds = new Rectangle(Location, new Size(w+2, h+2));
+            capt = capt ?? name;
+            ctl = new NewXForms.XSimpleControl(parent.GetXControl(),bounds,capt,ctlType,elemname);
+            foreach (KeyValuePair<string,string> tag in RawAttrs)
+            {
+                ctl.Tags.Add(tag.Key,tag.Value);
+            }
+            
+            return ctl;
         }
         protected override Control CreateControl()
         {
