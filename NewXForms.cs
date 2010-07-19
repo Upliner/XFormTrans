@@ -8,19 +8,21 @@ namespace XFormTrans.NewXForms
 {
     public abstract class XControl
     {
-        protected readonly XControl parent;
-        protected readonly Rectangle bounds;
-        protected readonly string caption;
+        protected XControl parent;
+        protected Rectangle bounds;
+        protected string caption;
+        protected bool visible;
         
         private readonly List<XControl> children = new List<XControl>();
         private readonly Dictionary<string, string> tags = new Dictionary<string, string>();
         private Control control;
         
-        protected XControl(XControl parent, Rectangle bounds, string caption)
+        protected XControl(XControl parent, Rectangle bounds, string caption, bool visible)
         {
             this.parent = parent;
             this.bounds = bounds;
             this.caption = caption;
+            this.visible = visible;
             if (parent != null) {
                 parent.children.Add(this);
             }
@@ -36,8 +38,8 @@ namespace XFormTrans.NewXForms
             return control;
         }
         public abstract string ElementName { get; }
-        public string Caption { get { return caption; } }
-        public Rectangle Bounds
+        public virtual string Caption { get { return caption; } }
+        public virtual Rectangle Bounds
         { 
             get
             {
@@ -45,15 +47,28 @@ namespace XFormTrans.NewXForms
                 return bounds;
             }
         }
+        public virtual bool Visible
+        { 
+            get
+            {
+                if (control != null) return control.Visible;
+                return visible;
+            }
+        }
         public Dictionary<string, string> Tags { get { return tags; } }
         public XControl Parent { get { return parent; } }
         public XmlElement ToXml(XmlDocument doc)
         {
             XmlElement n = doc.CreateElement(ElementName);
+            caption = Caption;
+            bounds = Bounds;
+            visible = Visible;
             n.SetAttribute("x",bounds.X.ToString());
             n.SetAttribute("y",bounds.Y.ToString());
             n.SetAttribute("w",bounds.Width.ToString());
             n.SetAttribute("h",bounds.Height.ToString());
+            n.SetAttribute("text",caption);
+            n.SetAttribute("visible",visible.ToString().ToLower());
             foreach (KeyValuePair<string,string> tag in tags)
             {
                 XmlElement n2 = doc.CreateElement("tag");
@@ -79,7 +94,8 @@ namespace XFormTrans.NewXForms
     }
     public class XForm : XControl
     {
-        public XForm(Size size, string caption) : base(null,new Rectangle(0,0,size.Width,size.Height),caption)
+        public XForm(Size size, string caption)
+            : base(null,new Rectangle(0,0,size.Width,size.Height),caption,true)
         {
         }
         public Form CreateForm()
@@ -99,8 +115,8 @@ namespace XFormTrans.NewXForms
     {
         readonly Type type;
         readonly string elementName;
-        public XSimpleControl(XControl parent, Rectangle bounds, string caption, Type type, string elementName)
-            : base(parent,bounds,caption)
+        public XSimpleControl(XControl parent, Rectangle bounds, string caption, bool visible, Type type, string elementName)
+            : base(parent,bounds,caption,visible)
         {
             if (!type.IsSubclassOf(typeof(Control)))
                 throw new ArgumentException("'type' must be subclass of Control","type");
@@ -112,6 +128,7 @@ namespace XFormTrans.NewXForms
             Control ctl = (Control)Activator.CreateInstance(type);
             ctl.Bounds = bounds;
             ctl.Text = caption;
+            ctl.Visible = visible;
             return ctl;
         }
         public override string ElementName { get { return elementName; }}

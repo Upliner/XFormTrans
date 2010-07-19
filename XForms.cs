@@ -64,12 +64,13 @@ namespace XFormTrans
         protected abstract NewXForms.XControl CreateXControl();
         public Control GetControl()
         {
-            if (control == null)
+            return GetXControl().GetControl();
+            /*if (control == null)
             {
                 control = CreateControl();
                 foreach (XControl cctl in childs) control.Controls.Add(cctl.GetControl());
             }
-            return control;
+            return control;*/
         }
         public NewXForms.XControl GetXControl()
         {
@@ -127,7 +128,6 @@ namespace XFormTrans
                 
             }
             form.Height = height/scale+40;
-			//form.Site.DesignMode = true;
             return form;
         }
         public XForm(XmlElement node) : base(node)
@@ -156,8 +156,7 @@ namespace XFormTrans
                 try
                 {
                     if ("100".Equals(ctl.RawAttrs["ControlType"])
-					    && (!"124".Equals(ctl.parent.RawAttrs["ControlType"]))
-					    /* && ("109".Equals(ctl.parent.RawAttrs["ControlType"])||"111".Equals(ctl.parent.RawAttrs["ControlType"]))*/)
+					    && (!"124".Equals(ctl.parent.RawAttrs["ControlType"])))
                     {
                         obj = (XControl)ctl.parent;
                         obj.childs.Remove(ctl);
@@ -172,6 +171,15 @@ namespace XFormTrans
     {
         public XFormObj parent;
         public string name;
+        static readonly string[] usedattrs = {
+            "Caption",
+            "Top",
+            "Left",
+            "Width",
+            "Height",
+            "Visible",
+            "Parent",
+        };
         public XControl(XmlNode node) : base(node)
         {   name = RawAttrs["Name"];
             if (RawAttrs.ContainsKey("Top") && RawAttrs.ContainsKey("Left") && RawAttrs.ContainsKey("Width") && RawAttrs.ContainsKey("Height"))
@@ -242,10 +250,17 @@ namespace XFormTrans
             }
             Rectangle bounds = new Rectangle(Location, new Size(w+2, h+2));
             capt = capt ?? name;
-            ctl = new NewXForms.XSimpleControl(parent.GetXControl(),bounds,capt,ctlType,elemname);
+            ctl = new NewXForms.XSimpleControl(parent.GetXControl(),bounds,capt,bool.Parse(this["Visible"]),ctlType,elemname);
             foreach (KeyValuePair<string,string> tag in RawAttrs)
             {
-                ctl.Tags.Add(tag.Key,tag.Value);
+                if (tag.Value.Equals("")) continue;
+                bool isused = false;
+                foreach (string s in usedattrs)
+                    if (tag.Key.Equals(s)) {
+                        isused = true;
+                        break;
+                    }
+                if (!isused) ctl.Tags.Add(tag.Key,tag.Value);
             }
             
             return ctl;
@@ -274,7 +289,6 @@ namespace XFormTrans
                 case 109:
                 case 111:
                     ctl = new TextBox();
-                    ((TextBox)ctl).Multiline = true;
                     break;
                 case 104:
                     ctl = new Button();
@@ -290,9 +304,9 @@ namespace XFormTrans
             {
                 ctl.Font = new Font(this["FontName"], float.Parse(this["FontSize"] ?? ""));
             } catch (FormatException) { } catch (OverflowException) { }
-            if (!(ctl is GroupBox)) ctl.Text = capt ?? name;
+            ctl.Text = capt ?? name;
             if ((this["Visible"] ?? "").ToLowerInvariant() == "false") ctl.Visible = false; else ctl.Visible =  true;
-			return ctl;
+            return ctl;
         }
     }
 }
